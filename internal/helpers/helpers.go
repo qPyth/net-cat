@@ -1,9 +1,12 @@
 package helpers
 
 import (
+	"bufio"
+	"fmt"
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 var (
@@ -27,7 +30,20 @@ func Write(conn net.Conn, message string) error {
 }
 
 func Read(conn net.Conn) (string, error) {
-	buffer := make([]byte, 4)
-	_, err := conn.Read(buffer)
-	return string(buffer), err
+	reader := bufio.NewReader(conn)
+	return reader.ReadString('\n')
+}
+
+func MessageFromUser(name string) string {
+	currentTime := time.Now()
+	formattedTime := currentTime.Format("2006-01-02 15:04:05")
+
+	return fmt.Sprintf("[%s][%s]: ", formattedTime, name)
+}
+
+func MessageFromServer(message string) string {
+	currentTime := time.Now()
+	formattedTime := currentTime.Format("2006-01-02 15:04:05")
+
+	return fmt.Sprintf("[%s][%s]: ", formattedTime, message)
 }
