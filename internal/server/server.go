@@ -10,6 +10,10 @@ import (
 	"sync"
 )
 
+const (
+	maxClients = 10
+)
+
 type TcpServer struct {
 	Socket        string
 	onlineClients map[string]net.Conn
@@ -32,7 +36,6 @@ func (t *TcpServer) Start() {
 		if err != nil {
 			log.Fatal(err)
 		}
-
 	}(listener)
 
 	for {
@@ -40,7 +43,6 @@ func (t *TcpServer) Start() {
 		if err != nil {
 			log.Fatal(err)
 		}
-
 		go t.handleClientConnection(conn)
 	}
 }
@@ -64,44 +66,54 @@ func (t *TcpServer) handleClientConnection(conn net.Conn) {
 	t.onlineClients[client.name] = conn
 	t.mutex.Unlock()
 
-	message := fmt.Sprintf("User %s connected to chat ...\n", client.name)
-	t.broadcast(message, client.name)
-	t.mutex.Lock()
+	t.broadcast(h.MessageFromServerNewConnect(client.name), client.name)
+
 	if t.messages != nil {
+		t.mutex.Lock()
 		for _, s := range t.messages {
+			s = strings.Replace(s, "\n", "", 1)
 			err := h.Write(conn, s)
 			if err != nil {
 				return
 			}
 		}
+		t.mutex.Unlock()
 	}
-	t.mutex.Unlock()
+
 	for {
+		h.Write(client.conn, h.NewInput(client.name))
 		message, err := h.Read(conn)
+		message = strings.ReplaceAll(message, "\n", "")
 		if err == io.EOF {
-			message = fmt.Sprintf("User %s left from the chat\n", client.name)
-			t.broadcast(message, client.name)
+			delete(t.onlineClients, client.name)
+			t.broadcast(h.MessageFromServerLeftFromChat(client.name), client.name)
+			h.Write(client.conn, h.MessageFromUser(client.name))
 			err := conn.Close()
 			if err != nil {
 				return
 			}
-			delete(t.onlineClients, client.name)
 			return
 		}
-		message = fmt.Sprintf("%s%s", h.MessageFromUser(client.name), message)
+		message = fmt.Sprintf("%s%s\n", h.MessageFromUser(client.name), message)
 		t.broadcast(message, client.name)
 		t.messages = append(t.messages, message)
 	}
 }
 
-func (t *TcpServer) broadcast(message string, self string) {
+func (t *TcpServer) broadcast(message string, writingUser string) {
+	t.mutex.Lock()
 	for name, conn := range t.onlineClients {
-		if name == self {
+		if name == writingUser {
 			continue
 		}
 		err := h.Write(conn, message)
+		if err != nil {
+			return
+		}
 		t.errorHandler(err)
+		h.Write(conn, h.NewInput(name))
 	}
+	t.mutex.Unlock()
 }
 
 func (t *TcpServer) errorHandler(err error) {

@@ -38,12 +38,20 @@ func MessageFromUser(name string) string {
 	currentTime := time.Now()
 	formattedTime := currentTime.Format("2006-01-02 15:04:05")
 
-	return fmt.Sprintf("[%s][%s]: ", formattedTime, name)
+	return fmt.Sprintf("\n[%s][%s]: ", formattedTime, name)
 }
 
-func MessageFromServer(message string) string {
+func NewInput(name string) string {
 	currentTime := time.Now()
 	formattedTime := currentTime.Format("2006-01-02 15:04:05")
 
-	return fmt.Sprintf("[%s][%s]: ", formattedTime, message)
+	return fmt.Sprintf("[%s][%s]: ", formattedTime, name)
+}
+
+func MessageFromServerNewConnect(name string) string {
+	return fmt.Sprintf("\nUser %s connected to chat ...\n", name)
+}
+
+func MessageFromServerLeftFromChat(name string) string {
+	return fmt.Sprintf("\nUser %s left from chat ...\n", name)
 }
