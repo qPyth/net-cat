@@ -55,3 +55,32 @@ func MessageFromServerNewConnect(name string) string {
 func MessageFromServerLeftFromChat(name string) string {
 	return fmt.Sprintf("\nUser %s left from chat ...\n", name)
 }
+func MessageFromServerIncorrectInput() string {
+	return fmt.Sprintf("Incorrect Input\n")
+}
+
+func MessageIsValid(message string) bool {
+	messInRune := []rune(message)
+	if len(messInRune) == 0 {
+		return false
+	}
+	for _, w := range messInRune {
+		if w < 32 || w > 127 {
+			return false
+		}
+	}
+	return true
+}
+
+func NameIsValid(message string) bool {
+	messInRune := []rune(message)
+	if len(messInRune) == 0 || len(messInRune) > 15 {
+		return false
+	}
+	for _, w := range messInRune {
+		if w < 32 || w > 127 {
+			return false
+		}
+	}
+	return true
+}

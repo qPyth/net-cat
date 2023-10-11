@@ -43,6 +43,18 @@ func (t *TcpServer) Start() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		if len(t.onlineClients) == maxClients {
+			err := h.Write(conn, "Server is full, try again later")
+			if err != nil {
+				return
+			}
+			err = conn.Close()
+			if err != nil {
+				return
+			}
+			continue
+		}
+
 		go t.handleClientConnection(conn)
 	}
 }
@@ -50,22 +62,32 @@ func (t *TcpServer) Start() {
 func (t *TcpServer) handleClientConnection(conn net.Conn) {
 	err := h.Write(conn, h.Greeting())
 	t.errorHandler(err)
+	var name string
+	for {
+		err = h.Write(conn, "[Enter your name]: ")
+		t.errorHandler(err)
 
-	err = h.Write(conn, "[Enter your name: ]\n")
-	t.errorHandler(err)
-
-	name, err := h.Read(conn)
-	if err != nil {
-		log.Fatal(err)
+		name, err = h.Read(conn)
+		if err != nil {
+			log.Fatal(err)
+		}
+		name = strings.ReplaceAll(name, "\n", "")
+		if _, ok := t.onlineClients[name]; ok {
+			err = h.Write(conn, "this name is already taken, please choose other\n")
+			continue
+		}
+		if !h.NameIsValid(name) {
+			err = h.Write(conn, "The name contains illegal characters or is longer than 15 characters\n")
+			continue
+		}
+		break
 	}
-	name = strings.ReplaceAll(name, "\n", "")
 	client := NewClient(conn)
 	client.SetName(name)
 
 	t.mutex.Lock()
 	t.onlineClients[client.name] = conn
 	t.mutex.Unlock()
-
 	t.broadcast(h.MessageFromServerNewConnect(client.name), client.name)
 
 	if t.messages != nil {
@@ -79,11 +101,12 @@ func (t *TcpServer) handleClientConnection(conn net.Conn) {
 		}
 		t.mutex.Unlock()
 	}
-
 	for {
-		h.Write(client.conn, h.NewInput(client.name))
+		err := h.Write(client.conn, h.NewInput(client.name))
+		if err != nil {
+			return
+		}
 		message, err := h.Read(conn)
-		message = strings.ReplaceAll(message, "\n", "")
 		if err == io.EOF {
 			delete(t.onlineClients, client.name)
 			t.broadcast(h.MessageFromServerLeftFromChat(client.name), client.name)
@@ -94,9 +117,18 @@ func (t *TcpServer) handleClientConnection(conn net.Conn) {
 			}
 			return
 		}
-		message = fmt.Sprintf("%s%s\n", h.MessageFromUser(client.name), message)
-		t.broadcast(message, client.name)
-		t.messages = append(t.messages, message)
+		message = strings.ReplaceAll(message, "\n", "")
+		message = strings.TrimSpace(message)
+		if h.MessageIsValid(message) {
+			message = fmt.Sprintf("%s%s\n", h.MessageFromUser(client.name), message)
+			t.broadcast(message, client.name)
+			t.messages = append(t.messages, message)
+		} else {
+			err := h.Write(conn, h.MessageFromServerIncorrectInput())
+			if err != nil {
+				return
+			}
+		}
 	}
 }
 
