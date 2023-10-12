@@ -6,12 +6,13 @@ import (
 	"log"
 	"net"
 	h "net-cat/internal/helpers"
+	"runtime"
 	"strings"
 	"sync"
 )
 
 const (
-	maxClients = 10
+	maxClients = 3
 )
 
 type TcpServer struct {
@@ -41,20 +42,20 @@ func (t *TcpServer) Start() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Fatal(err)
+			err := conn.Close()
+			if err != nil {
+				log.Printf("Problem with close connection: %s", err)
+			}
 		}
-		if len(t.onlineClients) == maxClients {
-			err := h.Write(conn, "Server is full, try again later")
+		numGoroutines := runtime.NumGoroutine()
+		if numGoroutines > maxClients {
+			err := h.Write(conn, "Server is full, please try again later\n")
 			if err != nil {
 				return
 			}
-			err = conn.Close()
-			if err != nil {
-				return
-			}
+			_ = conn.Close()
 			continue
 		}
-
 		go t.handleClientConnection(conn)
 	}
 }
@@ -69,7 +70,10 @@ func (t *TcpServer) handleClientConnection(conn net.Conn) {
 
 		name, err = h.Read(conn)
 		if err != nil {
-			log.Fatal(err)
+			if err == io.EOF {
+				conn.Close()
+				return
+			}
 		}
 		name = strings.ReplaceAll(name, "\n", "")
 		if _, ok := t.onlineClients[name]; ok {
@@ -82,6 +86,7 @@ func (t *TcpServer) handleClientConnection(conn net.Conn) {
 		}
 		break
 	}
+
 	client := NewClient(conn)
 	client.SetName(name)
 
